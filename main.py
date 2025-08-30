@@ -1,53 +1,66 @@
+import os
+import time
+from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
-import os
-from dotenv import load_dotenv
+from webdriver_manager.chrome import ChromeDriverManager
 
+# Load credentials from .env
 load_dotenv()
-
-PROMISED_DOWN = 150
-PROMISED_UP = 10
 TWITTER_EMAIL = os.getenv("TWITTER_EMAIL")
 TWITTER_PASSWORD = os.getenv("TWITTER_PASSWORD")
 
+# Setup Chrome with webdriver-manager (auto installs correct driver)
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service)
 
-class InternetSpeedTwitterBot:
-    def __init__(self):
-        self.driver = webdriver.Chrome()
-        self.up = 0
-        self.down = 0
+# 1. Go to Speedtest.net
+driver.get("https://www.speedtest.net/")
+time.sleep(3)
 
-    def get_internet_speed(self):
-        self.driver.get("https://www.speedtest.net/")
+# Click GO button
+go_button = driver.find_element(By.CLASS_NAME, "start-text")
+go_button.click()
 
-        # Give time for page to load
-        time.sleep(3)
+# Wait for results
+print("Running speed test, please wait...")
+time.sleep(45)  # ⏳ enough time for speed test to finish
 
-        # Click "Go" button
-        go_button = self.driver.find_element(By.CSS_SELECTOR, ".start-button a")
-        go_button.click()
+# Extract results
+download_speed = driver.find_element(By.CLASS_NAME, "download-speed").text
+upload_speed = driver.find_element(By.CLASS_NAME, "upload-speed").text
+print(f"Download: {download_speed} Mbps, Upload: {upload_speed} Mbps")
 
-        # Wait for results to appear
-        download_result = WebDriverWait(self.driver, 120).until(
-            EC.presence_of_element_located((By.XPATH, '//*[@id="container"]/div/div[3]/div/div/div/div[2]/div[3]/div[3]/div/div[3]/div/div/div[2]/div[1]/div[3]/div/div[2]/span'))
-        )
+# 2. Login to Twitter
+driver.get("https://twitter.com/login")
+wait = WebDriverWait(driver, 30)
 
-        upload_result = self.driver.find_element(
-            By.XPATH, '//*[@id="container"]/div/div[3]/div/div/div/div[2]/div[3]/div[3]/div/div[3]/div/div/div[2]/div[1]/div[2]/div/div[2]/span'
-        )
+# Enter email
+email_input = wait.until(EC.presence_of_element_located((By.NAME, "text")))
+email_input.send_keys(TWITTER_EMAIL)
+email_input.send_keys(Keys.RETURN)
+time.sleep(2)
 
-        self.down = download_result.text
-        self.up = upload_result.text
+# Enter password
+password_input = wait.until(EC.presence_of_element_located((By.NAME, "password")))
+password_input.send_keys(TWITTER_PASSWORD)
+password_input.send_keys(Keys.RETURN)
+time.sleep(5)
 
-    def tweet_at_provider(self):
-        # TODO: Add Selenium automation to log into Twitter and tweet
-        pass
+# 3. Compose and Post Tweet
+tweet_box = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Tweet text']")))
+tweet_message = f"Hey Internet Provider, why is my internet {download_speed}down/{upload_speed}up when I pay for much more? 😡 #SpeedTest"
+tweet_box.send_keys(tweet_message)
 
+tweet_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Tweet']")))
+tweet_button.click()
 
-bot = InternetSpeedTwitterBot()
-bot.get_internet_speed()
-print(f"Down: {bot.down}, Up: {bot.up}")
-bot.tweet_at_provider()
+print("Tweet sent successfully ✅")
+time.sleep(5)
+
+# Close browser
+driver.quit()
